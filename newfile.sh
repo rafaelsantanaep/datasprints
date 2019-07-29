@@ -11,9 +11,9 @@ key="Key"
 function aws_config()
 {
     echo "Digite aqui sua $key da AWS"
-    read AWS_KEY
+    read AWS_INFO
     echo "Sua $key está correta?"
-    echo $AWS_KEY
+    echo $AWS_INFO
     read user_input
 
     if [[ $user_input = "y" ]]
@@ -32,6 +32,10 @@ do
     aws_config
 done
 
+
+AWS_KEY=$AWS_INFO
+
+
 key="SECRET"
 user_input=""
 
@@ -40,6 +44,11 @@ while [[ $user_input != "y" ]]
 do 
     aws_config
 done
+
+
+AWS_SECRET=$AWS_INFO
+
+echo $AWS_KEY $AWS_SECRET
 
 echo "Seu cluster está sendo criado"
 

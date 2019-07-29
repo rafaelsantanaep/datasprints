@@ -10,7 +10,7 @@ def drop_tables(cur, conn):
 
     Os queries utilizados para deletar as tabelas estão disponíveis no arquivo sql_queries.py.
 
-    """"    
+    """
     for query in drop_table_queries:
         try:
             print(f"{query}")
@@ -33,7 +33,7 @@ def create_tables(cur, conn):
             print("Tabela criada com sucesso")
         except psycopg2.Error as e:
             print(e)
-            print("Não foi possível criar a tablea")
+            print("Não foi possível criar a tabela")
 
 def main():
     """
