@@ -19,14 +19,15 @@ def main():
 
     # tabela vendors
     df = pd.read_csv('vendors.csv', header=None)
+    print("Tentando inserir os dados referentes as empresas de taxi")
     for index, row in df.iterrows():
-        print("Tentando inserir os dados referentes as empresas de taxi")
         try:
             cur.execute(etl_queries['insert_vendors'], list(row))
             conn.commit()
         except psycopg2.Error as e:
             print("Não foi possível realizar a inserção dos dados na tabela vendors.")
             print(e)
+    print("Valores inseridos na database com sucesso!")
 
     t1 = datetime.now()
     # tabela trips temporária
