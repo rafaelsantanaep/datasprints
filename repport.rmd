@@ -1,66 +1,505 @@
 ---
-title: "Analysis Title"
-author: Rafael
-date: 2019 Agosto, 02
-output: 
+title: "Análise das viagens de taxi em Nova York"
+author: "Rafael"
+date: August 02, 2018
+output:
   html_document:
     toc: true
     toc_depth: 3
     toc_float: true
 ---
-
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(reticulate)
-
-```
-
-```{r}
-df = pandas.read_csv("payment.csv")
-```
-```{r}
-library(reticulate)
-```
-
-
-```{python}
-{'asdfa': 'asdfasdf'}
+reticulate::repl_python()
+library(ggplot2)
+theme_set(theme_minimal())
+library(dplyr)
+options(scipen = 999)
+library(grid)
+library(lubridate)
+library(scales)
+library(tidyquant)
 ```
 
 
-
-```{python}
-py  
-```
-
-```{python}
-import psycogp2
-import pandas
+```{python echo=FALSE, include=FALSE}
+# Manipulação de dados
+import pandas as pd
 import numpy as np
+from datetime import datetime
 
-import os
 
-import panda
+# conexão com o banco de dados
+import psycopg2
+import configparser
+conf = configparser.ConfigParser()
+conf.read('dwh.cfg')
+conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*conf['CLUSTER'].values()))
+cur = conn.cursor()
+conn.set_session(autocommit=True)
+
+
+# Visualização de dados
+import matplotlib.pyplot as plt
+import seaborn as sns
+```
+
+
+## Introdução 
+
+Antes de entrar um pouco nos insights que podem ser extraídos através do banco de dados é imporante detalhar um pouco o processo de criação do mesmo. 
+
+
+1. O primeiro passo foi realizar uma exploração dos dados simples identificar potenciais problemas que poderiam ocorrer durante o processo de inserção dos dados em um banco de dados. Além de ser uma etapa muito importante para definição dos tipos de dados que serão utilizados. 
+
+
+Ainda nessa etapa, foi realizada uma prototipação das consultas que seriam utilizadas para obter os dados solicitados do banco de dados. Essa etapa foi feita em uma amostra do banco de dados com 100.000 linhas (aleatóriamente selecionadas) para permitir uma comparação entre os resultados obtidos por meio de uma consulta no banco de dados e os resultados obtidos utilizando a biblioteca `pandas`
+
+2. Automação do processo de ETL através da utilização de scripts de python e um script do bash (Shell):
+  - create_tables.py
+  - etl.py
+  - sql_queries.py
+  - cloud_config.py
+  - automate_elt.sh
+  
+Para tanto, houve a criação de um script que através da obtenção de dois inputs do usuário: `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` permite automatizar todo o processo de criação de um cluster na Nuvem especificamente para esse projeto.
+
+Após a criação desses cluster, um arquivo de configuração era criado para ser utilizado pelos
+
+  
+3. Nessa última etapa, através da utilização do cluster 
+    
+  
+## Quesitos Mínimos  
+  
+
+### Distância média percorrida em viagens com no máximo dois passageiros
+
+```{python echo=FALSE}
+# Calculando a distância média
+cur.execute("SELECT AVG(trip_distance) FROM trips WHERE passenger_count <= 2")
+average_distance = cur.fetchone()
+
+
+# coletando todos os registros relacionados a distância em corridas com até dois passageiros
+cur.execute("SELECT trip_distance FROM trips WHERE passenger_count <= 2")
+distribution = cur.fetchall()
+
+
+# transformando o retorno do banco de dados em uma lista
+distribution = [i[0] for i in distribution]
+```
+
+
+
+```{r include=TRUE, echo=FALSE}
+# criando um data-frame do R.
+distribution <- as.data.frame(py$distribution)
+
+# renomeando a coluna
+names(distribution) <- 'data'
+
+
+distribution %>%
+  
+  # Com o intuito de ajustar o histograma optei pela utilização de um subset dos dados
+  subset(data < quantile(data, 0.975)) %>%
+  
+  
+  # A intenção é criar um histograma, dessa forma, só é necessário uma dimensão.
+  ggplot(aes(data)) + 
+  
+  # Adicionando o tipo de gráfico que vai ser utilizado
+  geom_histogram(bins=30, fill="#2c3e50") +
+  
+  # Adicionando a linha que indica a média
+  geom_vline(xintercept = mean(distribution$data), color='red') +
+  
+  theme_tq() + 
+  
+  # Adicionando os labels.
+  labs(title='Distribuição das distância das corridas',
+       subtitle = "Somente corridas com até dois passageiros",
+       x='Distância (milhas)',
+       y='Número de corridas')
+  
+```
+
+
+### Quantidade total arrecada pelas três maiores empresas de taxi de Nova York
+
+
+```{python}
+cur.execute("""
+SELECT nome, current, SUM(total_amount), COUNT(*)
+FROM trips t
+JOIN vendors v
+ON t.vendor_id = v.vendor_id
+WHERE total_amount IS NOT NULL
+GROUP BY 1, 2
+ORDER BY 3 DESC
+""")
+results = cur.fetchall()
+
+# checando se o retorno possui o mesmo número de linhas que a tabela na cloud
+assert sum([i[3] for i in results]) == 4000000
+
+# transformando os dados em uma lista de dicionários para facilitar o processo de conversão para um DataFrame
+quantidade_arrecadada = [{'vendor': i[0], 'valor_total': i[2], 'numero_de_corridas': i[3]} for i in results]
+
+# transformando em um DataFrame que será utilizado no R.
+quantidade_arrecadada = pd.DataFrame(quantidade_arrecadada)
+```
+
+
+
+```{r fig.width=8, fig.height=5}
+quantidade_arrecadada <- as.data.frame(py$quantidade_arrecadada)
+
+# Criação do gráfico
+plot1 <- quantidade_arrecadada %>%
+  # removendo a empresa que possui a menor quantidade arrecadada
+  filter(valor_total != min(valor_total)) %>%
+  
+  # criando uma coluna com o valor arrecadado em dólares para ser utilizado como label
+  mutate(valor_total_text = dollar(valor_total)) %>%
+  
+  # As colunas serão reorganizadas para os dados serem dispostos em ordem decrescente
+  ggplot(aes(reorder(vendor, -valor_total), valor_total)) + 
+  
+  # criando gráfico de colunas
+  geom_col(fill="#C40003") +
+  
+  geom_smooth(method='lm', se=FALSE) +
+  
+  # Formatando o gráfico
+  theme_tq() + 
+  geom_label(aes(label = valor_total_text)) +
+  scale_y_continuous(labels = dollar) +
+  labs(title='Quantidade arrecadada pelas três maiores empresas', 
+       x='empresas de taxi',
+       y='total arrecadado')
+
+
+
+plot2 <- quantidade_arrecadada %>%
+  # removendo a empresa que possui a menor quantidade arrecadada
+  filter(valor_total != min(valor_total)) %>%
+  
+  # As colunas serão reorganizadas para os dados serem dispostos em ordem decrescente
+  ggplot(aes(reorder(vendor, -numero_de_corridas), numero_de_corridas)) + 
+  
+  # criando gráfico de colunas
+  geom_col(fill="#e31a1c") +
+  
+  # formatando os gráficos
+  geom_smooth(method='lm', se=FALSE) + 
+  geom_label(aes(label = numero_de_corridas)) +
+  theme_tq() + 
+  labs(
+    title='Número de corridas realizadas pelas três maiores empresas', 
+    x='empresas de taxi',
+    y='número de corridas'
+    )
+
+
+plot1
+```
+
+
+
+### Distribuição mensal das corridas pagas em dinheiro nos últimos quatro anos
+
+
+```{python include=FALSE, echo=FALSE}
+cur.execute("""
+SELECT EXTRACT(year FROM pickup_datetime) AS year,
+    EXTRACT(month FROM pickup_datetime) AS month,
+      COUNT(*)
+FROM trips
+WHERE payment_type = 'Cash'
+GROUP BY 1, 2
+""")
+results = cur.fetchall()
+
+
+# transformando os dados obtidos em um dataframe com o index igual a data.
+distribuição = [{'data_mês': datetime.strptime(str(i[0]) + '-' + str(i[1]), '%Y-%m'), 
+                 'numero_de_corridas': i[2]} for i in results]
+distribuição = pd.DataFrame(distribuição)
+```
+
+```{python}
+# extraindo as corridas por mês e por ano
+cur.execute("""
+SELECT EXTRACT(year FROM pickup_datetime) AS year,
+    EXTRACT(month FROM pickup_datetime) AS month,
+      COUNT(*)
+FROM trips
+GROUP BY 1, 2
+""")
+results = cur.fetchall()
+# transformando os dados obtidos em um dataframe com o index igual a data.
+distribuição_all = [{'data_mês': datetime.strptime(str(i[0]) + '-' + str(i[1]), '%Y-%m'), 
+                 'numero_de_corridas': i[2]} for i in results]
+distribuição_all = pd.DataFrame(distribuição_all)
+```
+
+
+```{r}
+distribuição <- py$distribuição
+distribuição_all <- py$distribuição_all
+
+
+plot1 <- distribuição %>%
+  ggplot(aes(data_mês, numero_de_corridas)) + geom_line() + 
+  labs(title='Distribuição das corridas pagas em dinheiro por mês (2009-2012)',
+       x='mês e ano', y='número de corridas')
+
+
+plot2 <- distribuição_all %>%
+  ggplot(aes(data_mês, numero_de_corridas)) + geom_line() + 
+  
+  
+  # Formatando o gráfico
+  theme_tq() + 
+  labs(title='Distribuição das corridas por mês (2009-2012)',
+       x='mês e ano', y='número de corridas')
+
+
+plot2
+```
+
+
+
+
+```{python}
+cur.execute("""
+SELECT EXTRACT(month FROM t1.date), 
+       COUNT(*)
+FROM (SELECT pickup_datetime::date AS date, COUNT(*)
+     FROM trips
+     GROUP BY 1) t1
+GROUP BY 1
+ORDER BY 1
+""")
+
+results = cur.fetchall()
+results = [{'mês': key, 'numero_de_dias_com_registros': value} for key, value in results]
+results = pd.DataFrame(results).sort_values(by='mês', ascending=True)
+
+
+month_mappers = {1: 'Jan', 2:'Fev', 3:'Mar', 4:'Abr', 5:'Mai', 6: 'Jun',
+                 7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Out', 11: 'Nov', 12: 'Dec'}
+
+results['mês_texto'] = results['mês'].map(month_mappers)
+```
+
+```{r}
+dias_por_mes <- c(31,28,31,30,31,30,31,31,30,31,30,31)
+by_month_year <- py$results
+
+table_dias <- by_month_year %>%
+  
+  # dividindo a quantidade de dias total por mês por quatro, para obter a quantidade média por ano
+  mutate(numero_medio_por_ano = numero_de_dias_com_registros / 4) %>%
+  
+  # utilizando o vetor que foi criado na primeira linha para a criação de uma nova coluna no DF.
+  mutate(total_dias = dias_por_mes) %>%
+  
+  # criação de uma coluna com o percentual de datas que não estão presentes no banco de dados.
+  mutate(percent_missing_or_zero = 1 - (numero_medio_por_ano / total_dias)) %>%
+  
+  # mudando a formatação para porcentagem
+  mutate(percent_text = percent(percent_missing_or_zero))
+  
+
+
+# criando o gráfico de percentual de dias que não estão presentes por mẽs
+# no banco de dados
+table_dias %>%
+  
+  # omitindo valores igual a zero
+  subset(percent_missing_or_zero > 0) %>%
+  
+  # ordenando pelo mês
+  ggplot(aes(x = reorder(mês_texto, mês), y=percent_missing_or_zero)) + 
+  geom_col(fill="#2c3e50") + 
+
+  
+  # formatação do gráfico
+  geom_label(aes(label = percent_text)) +
+  scale_y_continuous(labels = percent) +
+  theme_tq() +
+  labs(
+    title="Percentual de dias em que não há registros de corridas por mês",
+    subtitle = "Meses com uma média igual ao número de dias naquele mês foram omitidos",
+    x="Percentual de dias",
+    y="Mês"
+  )
+
+
+table_dias
+```
+
+
+```{python}
+cur.execute("""
+SELECT payment_type, nome, SUM(tip_amount)
+FROM trips t
+JOIN vendors v
+ON t.vendor_id = v.vendor_id
+GROUP BY 1, 2
+""")
+results = cur.fetchall()
+
+
+results
+results = [{'forma_de_pagamento': value[0], 'empresa': value[1], 'gorgeta': value[2]} for value in results]
+results = pd.DataFrame(results)
+```
+
+```{r}
+tips_by_vendor_payment <- py$results
+
+tips_by_vendor_payment %>%
+  
+  # criando coluna com os valores em dólares
+  mutate(gorgeta_text = dollar(gorgeta)) %>%
+  
+  # retirando valores menores que 100 dólares
+  subset(gorgeta > 100) %>%
+  
+  # criando o grafico
+  ggplot(aes(empresa, gorgeta, fill=forma_de_pagamento)) + geom_col() +
+  scale_y_continuous(labels = dollar) +
+  
+  # Formatação do gráfico
+  theme_tq() +
+  geom_label(aes(label=gorgeta_text)) +
+  labs(
+    title='Total de gorgetas por empresa e por meio de pagamento',
+    x='Empresa',
+    y='Total (US$)',
+    fill='Forma de pagamento: '
+  )
+```
+
+
+
+
+```{python}
+cur.execute("""
+SELECT pickup_datetime::date, SUM(tip_amount)
+FROM trips
+WHERE EXTRACT(month FROM pickup_datetime) >= 10
+AND EXTRACT(year FROM pickup_datetime) = 2012
+GROUP BY 1
+""")
+results = cur.fetchall()
+
+results = [{'date': value[0], 'quantidade_diária': value[1]} for value in results]
+results = pd.DataFrame(results).sort_values(ascending=True, by='date')
+
+results['date'] = pd.to_datetime(results['date'])
 
 
 ```
 
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+max(gorgetas$date)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+```{r}
+gorgetas <- py$results
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+gorgetas %>%
+  
+  mutate(date = date(date)) %>%
+  
+  ggplot(aes(x=date, y=quantidade_diária)) + 
+  geom_line() +
+  scale_y_continuous(labels = dollar) +
+  scale_x_date(date_breaks = '4 days') +
+  
+
+  theme_tq() + 
+  labs(
+    title = 'Total de gorgetas por dia (Out-Dez) em 2012',
+    subtitle = 'Não há registros nos banco de dados a partir de 27-10-2012',
+    x='data',
+    y='total de gorgetas (US$)'
+  )
+  
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{python}
+cur.execute("""
+SELECT EXTRACT(dow from t1.pickup_datetime), AVG(t1.tempo_total)
+FROM (SELECT (EXTRACT(epoch FROM dropoff_datetime) - EXTRACT(epoch FROM pickup_datetime)) / 60 AS tempo_total,
+        pickup_datetime
+    FROM trips) t1
+WHERE EXTRACT(dow from t1.pickup_datetime) IN (0.0, 6.0)
+GROUP BY 1
+""")
+
+weekends = cur.fetchall()
+
+weekends = [{'weekday': i[0], 'avg': i[1]} for i in weekends]
+```
+
+
+
+```{python}
+cur.execute("""
+SELECT pickup_latitude, 
+    pickup_longitude,
+    dropoff_latitude,
+    dropoff_longitude
+FROM trips t
+WHERE EXTRACT(year from pickup_datetime) = 2010
+""")
+
+geospatial = cur.fetchall()
+```
+
+
+```{python}
+geospatial = [{'pickup_lat': float(i[0]), 'pickup_long': float(i[1]), 'dropoff_lat': float(i[2]), 'dropoff_long': float(i[3])} for i in geospatial]
+geospatial = pd.DataFrame(geospatial)
+```
+
+
+```{r}
+geospatial <- py$geospatial
+```
+
+
+
+```{r}
+median(geospatial$dropoff_lat)
+```
+
+
+```{r}
+providers
+```
+
+```{r}
+head(geospatial)
+```
+
+
+```{r}
+library(leaflet)
+
+geospatial %>%
+  leaflet() %>%
+  addProviderTiles(provider = providers$CartoDB.Positron) %>%
+  addMarkers(lat = geospatial$pickup_lat, lng = geospatial$pickup_long, clusterOptions = markerClusterOptions())
+```
+
+
