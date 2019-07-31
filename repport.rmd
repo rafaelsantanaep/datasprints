@@ -9,16 +9,18 @@ output:
     toc_float: true
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(reticulate)
-reticulate::repl_python()
 library(ggplot2)
 library(dplyr)
 options(scipen = 999)
-library(grid)
 library(lubridate)
 library(scales)
 library(tidyquant)
+library(ggmap)
+library(maps)
+
+reticulate::repl_python()
 ```
 
 
@@ -69,7 +71,21 @@ Após a criação desses cluster, um arquivo de configuração era criado para s
   
 3. Nessa última etapa, através da utilização do cluster 
     
-  
+## Introdução
+
+O objetivo desse relatório é extrair insights e, ao mesmo tempo, validar os dados que foram inseridos no banco de dados.
+
+Com o intuito de melhorar a qualidade do relatório, foi utilizado uma mistura de R, Python e SQL.
+
+- SQL foi utilizado para extração dos dados do banco de dados
+- Python para manipulação dos dados e a transformação dos dados requisitados do banco de dados em um DataFrame
+- R foi utilizado na confecção dos gráficos porque, apesar do Python possuir bibliotecas capazes de gerar gráficos, tais como seaborn, matplotlib ou a própria biblioteca de gráficos do Pandas, ainda considero o R mais flexível nesse ponto e, por conta disso, optei pela utilização da biblioteca ggplot2 para geração dos gráficos.
+- Para realizar a combinação de R com Python foi utilizado a biblioteca reticulate.
+
+
+Não pretendo detalhar o código utilizado dentro do relatório, mas todo o código utilizado está presente no arquivo `repport.rmd`.
+
+
 ## Quesitos Mínimos  
   
 
@@ -88,7 +104,13 @@ distribution = cur.fetchall()
 
 # transformando o retorno do banco de dados em uma lista
 distribution = [i[0] for i in distribution]
+
 ```
+
+Uma das informações que foi solicitada era a distância média em viagens que tinham até dois passageiros. Com o intuito de tornar esse dado mais descritivo, optei pela criação de um histograma com uma linha vertical interceptando a média porque possibilita a visualização de valores que estão muito acimas da média e de valores muito abaixo da média.
+
+
+Um detalhe que chamou atenção é que entre as corridas com até dois passageiros, haviam corridas em que o número de passageiros era igual a zero. Por conta disso, cheguei as outras variáveis existentes nessas observações. Como em todas essas linhas houve cobrança pela corrida de taxi, optei pela manuntenção delas.
 
 
 
@@ -126,7 +148,34 @@ distribution %>%
 ```
 
 
+Um ponto que chama atenção no histograma acima é que a grande maioria das corridas possui uma distância de até quatro milhas.
+
+Em média, em cada corrida realizada, é percorrido `py$average_distance` milhas.
+
+
 ### Quantidade total arrecada pelas três maiores empresas de taxi de Nova York
+
+```{python}
+cur.execute("SELECT vendor_id, nome, current FROM vendors")
+vendors = cur.fetchall()
+
+vendors = [{'id': i[0], 'nome': i[1], 'current': i[2]} for i in vendors]
+
+vendors = pd.DataFrame(vendors)
+```
+
+```{r}
+vendors <- py$vendors
+
+vendors
+```
+
+
+Como pode ser observado acima, existem cinco empresas de taxi em operação em Nova York, como pode ser observado através da coluna current.
+
+Um fato que chamou a atenção é que dessas cinco empresas, somente três empresas tiveram um faturamento expressivo. Sendo importante destacar que uma das empresas tiveram um faturamento igual a zero e uma delas teve um faturamento bem próximo a isso no últimos quatro anos. 
+
+
 
 
 ```{python}
@@ -153,7 +202,7 @@ quantidade_arrecadada = pd.DataFrame(quantidade_arrecadada)
 
 
 
-```{r fig.width=8, fig.height=5}
+```{r fig.width=11, fig.height=6}
 quantidade_arrecadada <- as.data.frame(py$quantidade_arrecadada)
 
 # Criação do gráfico
@@ -176,7 +225,7 @@ plot1 <- quantidade_arrecadada %>%
   theme_tq() + 
   geom_label(aes(label = valor_total_text)) +
   scale_y_continuous(labels = dollar) +
-  labs(title='Quantidade arrecadada pelas três maiores empresas', 
+  labs(title='Total arrecadado por empresa', 
        x='empresas de taxi',
        y='total arrecadado')
 
@@ -197,14 +246,17 @@ plot2 <- quantidade_arrecadada %>%
   geom_label(aes(label = numero_de_corridas)) +
   theme_tq() + 
   labs(
-    title='Número de corridas realizadas pelas três maiores empresas', 
+    title='Número de corridas realizadas por empresa', 
     x='empresas de taxi',
     y='número de corridas'
     )
 
+p1 <- arrangeGrob(plot1, plot2, ncol = 2)
+grid.arrange(p1)
 
-plot1
+
 ```
+
 
 
 
@@ -247,14 +299,22 @@ distribuição_all = pd.DataFrame(distribuição_all)
 
 
 ```{r}
+palette_light()
+```
+
+
+
+```{r}
 distribuição <- py$distribuição
 distribuição_all <- py$distribuição_all
 
 
 plot1 <- distribuição %>%
-  ggplot(aes(data_mês, numero_de_corridas)) + geom_line() + 
+  ggplot(aes(numero_de_corridas)) + geom_histogram(fill="#e31a1c") + 
   labs(title='Distribuição das corridas pagas em dinheiro por mês (2009-2012)',
-       x='mês e ano', y='número de corridas')
+       x='número de corridas', y='número de meses')
+  
+  theme_tq() 
 
 
 plot2 <- distribuição_all %>%
@@ -267,7 +327,7 @@ plot2 <- distribuição_all %>%
        x='mês e ano', y='número de corridas')
 
 
-plot2
+plot1
 ```
 
 
@@ -408,11 +468,6 @@ results['date'] = pd.to_datetime(results['date'])
 
 
 ```{r}
-max(gorgetas$date)
-```
-
-
-```{r}
 gorgetas <- py$results
 
 gorgetas %>%
@@ -448,8 +503,14 @@ GROUP BY 1
 weekends = cur.fetchall()
 
 weekends = [{'weekday': i[0], 'avg': i[1]} for i in weekends]
+
+weekends = pd.DataFrame(weekends)
 ```
 
+```{r}
+weekends <- py$weekends
+weekends
+```
 
 
 ```{python}
@@ -472,6 +533,9 @@ geospatial = [{'pickup_lat': float(i[0]), 'pickup_long': float(i[1]),
                'trip_distance': float(i[4])} for i in geospatial]
 geospatial = pd.DataFrame(geospatial)
 ```
+
+
+
 
 
 ```{r}
