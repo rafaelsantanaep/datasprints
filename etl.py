@@ -10,7 +10,7 @@ from sql_queries import etl_queries
 def main():
     import configparser
     conf = configparser.ConfigParser()
-    conf.read('dwh.cfg')
+    conf.read('/home/rafael/Documents/data_sprints/dwh.cfg')
     
 
     # criando a conexão
@@ -18,8 +18,12 @@ def main():
     cur = conn.cursor()
 
     # tabela vendors
-    df = pd.read_csv('vendors.csv', header=None)
+    filepath = '/home/rafael/Documents/data_sprints/lookups/data-vendor_lookup-csv.csv'
+    df = pd.read_csv(filepath)
     print("Tentando inserir os dados referentes as empresas de taxi")
+
+    # iterando sobre as linhas do DataFrame e inserindo cada uma individualmente
+    # Como só existem cinco linhas nessa tabela, preferi adotar essa abordagem.
     for index, row in df.iterrows():
         try:
             cur.execute(etl_queries['insert_vendors'], list(row))
