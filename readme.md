@@ -9,6 +9,9 @@ O projeto tem como objetivo a realização de uma Análise Exploratória dos Dad
 
 Como era uma base de dados relativamente média (4GB), optei pela utilização de um banco de dados na AWS Redshift para armazenar os dados.
 
+## Site com a análise: https://rafaelsantanaep.github.io/datasprints-html/
+
+
 ## Replicando o processo na sua máquina
 
 As instruções abaixo possibilitarão a replicação de todo o código utilizado.
