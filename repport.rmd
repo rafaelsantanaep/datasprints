@@ -4,12 +4,13 @@ author: "Rafael"
 date: August 02, 2018
 output:
   html_document:
+    code_folding: hide
     toc: true
     toc_depth: 3
     toc_float: true
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 library(reticulate)
 library(ggplot2)
 library(dplyr)
@@ -17,10 +18,10 @@ options(scipen = 999)
 library(lubridate)
 library(scales)
 library(tidyquant)
-library(ggmap)
+library(gridExtra)
+library(maptools)
 library(maps)
-
-reticulate::repl_python()
+library(gganimate)
 ```
 
 
@@ -47,30 +48,6 @@ import seaborn as sns
 ```
 
 
-## Introdução 
-
-Antes de entrar um pouco nos insights que podem ser extraídos através do banco de dados é imporante detalhar um pouco o processo de criação do mesmo. 
-
-
-1. O primeiro passo foi realizar uma exploração dos dados simples identificar potenciais problemas que poderiam ocorrer durante o processo de inserção dos dados em um banco de dados. Além de ser uma etapa muito importante para definição dos tipos de dados que serão utilizados. 
-
-
-Ainda nessa etapa, foi realizada uma prototipação das consultas que seriam utilizadas para obter os dados solicitados do banco de dados. Essa etapa foi feita em uma amostra do banco de dados com 100.000 linhas (aleatóriamente selecionadas) para permitir uma comparação entre os resultados obtidos por meio de uma consulta no banco de dados e os resultados obtidos utilizando a biblioteca `pandas`
-
-2. Automação do processo de ETL através da utilização de scripts de python e um script do bash (Shell):
-  - create_tables.py
-  - etl.py
-  - sql_queries.py
-  - cloud_config.py
-  - automate_elt.sh
-  
-Para tanto, houve a criação de um script que através da obtenção de dois inputs do usuário: `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` permite automatizar todo o processo de criação de um cluster na Nuvem especificamente para esse projeto.
-
-Após a criação desses cluster, um arquivo de configuração era criado para ser utilizado pelos
-
-  
-3. Nessa última etapa, através da utilização do cluster 
-    
 ## Introdução
 
 O objetivo desse relatório é extrair insights e, ao mesmo tempo, validar os dados que foram inseridos no banco de dados.
@@ -81,17 +58,15 @@ Com o intuito de melhorar a qualidade do relatório, foi utilizado uma mistura d
 - Python para manipulação dos dados e a transformação dos dados requisitados do banco de dados em um DataFrame
 - R foi utilizado na confecção dos gráficos porque, apesar do Python possuir bibliotecas capazes de gerar gráficos, tais como seaborn, matplotlib ou a própria biblioteca de gráficos do Pandas, ainda considero o R mais flexível nesse ponto e, por conta disso, optei pela utilização da biblioteca ggplot2 para geração dos gráficos.
 - Para realizar a combinação de R com Python foi utilizado a biblioteca reticulate.
-
-
-Não pretendo detalhar o código utilizado dentro do relatório, mas todo o código utilizado está presente no arquivo `repport.rmd`.
+- O código utilizado para geração dos gráficos pode ser ativado ao clicar na caixinha `code`
 
 
 ## Quesitos Mínimos  
-  
+
 
 ### Distância média percorrida em viagens com no máximo dois passageiros
 
-```{python echo=FALSE}
+```{python echo=FALSE, include=FALSE}
 # Calculando a distância média
 cur.execute("SELECT AVG(trip_distance) FROM trips WHERE passenger_count <= 2")
 average_distance = cur.fetchone()
@@ -101,16 +76,9 @@ average_distance = cur.fetchone()
 cur.execute("SELECT trip_distance FROM trips WHERE passenger_count <= 2")
 distribution = cur.fetchall()
 
-
 # transformando o retorno do banco de dados em uma lista
 distribution = [i[0] for i in distribution]
-
 ```
-
-Uma das informações que foi solicitada era a distância média em viagens que tinham até dois passageiros. Com o intuito de tornar esse dado mais descritivo, optei pela criação de um histograma com uma linha vertical interceptando a média porque possibilita a visualização de valores que estão muito acimas da média e de valores muito abaixo da média.
-
-
-Um detalhe que chamou atenção é que entre as corridas com até dois passageiros, haviam corridas em que o número de passageiros era igual a zero. Por conta disso, cheguei as outras variáveis existentes nessas observações. Como em todas essas linhas houve cobrança pela corrida de taxi, optei pela manuntenção delas.
 
 
 
@@ -132,10 +100,10 @@ distribution %>%
   ggplot(aes(data)) + 
   
   # Adicionando o tipo de gráfico que vai ser utilizado
-  geom_histogram(bins=30, fill="#e31a1c") +
+  geom_histogram(bins=30, fill="#2c3e50") +
   
   # Adicionando a linha que indica a média
-  geom_vline(xintercept = mean(distribution$data), color="#2c3e50") +
+  geom_vline(xintercept = mean(distribution$data), color="red") +
   
   theme_tq() + 
   
@@ -147,38 +115,51 @@ distribution %>%
   
 ```
 
+```{r}
+distribution %>%
+  summary()
+```
 
-Um ponto que chama atenção no histograma acima é que a grande maioria das corridas possui uma distância de até quatro milhas.
 
-Em média, em cada corrida realizada, é percorrido `py$average_distance` milhas.
+Uma das informações que foi solicitada era a distância média em viagens que tinham até dois passageiros. Com o intuito de tornar esse dado mais descritivo, optei pela criação de um histograma com uma linha vertical interceptando a média porque possibilita a visualização de valores que estão muito acimas da média e de valores muito abaixo da média.
+
+Em média, em cada corrida realizada, são percorridas 2.66 milhas.
+
+Um ponto interessante que pode ser visualizado através do histograma que não poderia ser visualizado a partir da média é que os dados relativos a distância possuem uma assimetria a direita e, por conta disso, a média é superior a mediana e a moda. Isso ocorre porque a média é mais sensível a presença de outliers.
 
 
-### Quantidade total arrecada pelas três maiores empresas de taxi de Nova York
+Por fim,  Um detalhe que chamou atenção é que entre as corridas com até dois passageiros, havia corridas em que o número de passageiros era igual a zero. Por conta disso, chequei as outras variáveis existentes nessas observações para observar se houve cobrança por essas corridas. Em todas elas houve cobrança e, por conta disso, optei pela manutenção delas no banco de dados.
+
+### Quantidade total arrecadada pelas três maiores empresas de taxi de Nova York
+
+##### Empresas existentes na cidade
 
 ```{python}
+
+# extraindo os dados da tabela vendors
 cur.execute("SELECT vendor_id, nome, current FROM vendors")
 vendors = cur.fetchall()
 
+# Criando uma lista de dicionários que será utilizada para criação de um DataFrame
 vendors = [{'id': i[0], 'nome': i[1], 'current': i[2]} for i in vendors]
 
 vendors = pd.DataFrame(vendors)
 ```
 
 ```{r}
+# fazendo a transição do Python para o R
 vendors <- py$vendors
 
 vendors
 ```
 
 
-Como pode ser observado acima, existem cinco empresas de taxi em operação em Nova York, como pode ser observado através da coluna current.
-
-Um fato que chamou a atenção é que dessas cinco empresas, somente três empresas tiveram um faturamento expressivo. Sendo importante destacar que uma das empresas tiveram um faturamento igual a zero e uma delas teve um faturamento bem próximo a isso no últimos quatro anos. 
-
-
+Como pode ser observado acima, existem quatro empresas de taxi em operação e uma que não está operando.
 
 
 ```{python}
+# Query utilizado para adquirir tanto o faturamento total por empresa, como o número
+# de corridas realizadas por cada uma delas entre 2009 e 2012.
 cur.execute("""
 SELECT nome, current, SUM(total_amount), COUNT(*)
 FROM trips t
@@ -194,7 +175,8 @@ results = cur.fetchall()
 assert sum([i[3] for i in results]) == 4000000
 
 # transformando os dados em uma lista de dicionários para facilitar o processo de conversão para um DataFrame
-quantidade_arrecadada = [{'vendor': i[0], 'valor_total': i[2], 'numero_de_corridas': i[3]} for i in results]
+quantidade_arrecadada = [{'vendor': i[0], 'valor_total': i[2], 
+                         'numero_de_corridas': i[3]} for i in results]
 
 # transformando em um DataFrame que será utilizado no R.
 quantidade_arrecadada = pd.DataFrame(quantidade_arrecadada)
@@ -202,7 +184,7 @@ quantidade_arrecadada = pd.DataFrame(quantidade_arrecadada)
 
 
 
-```{r fig.width=11, fig.height=6}
+```{r fig.width=12, fig.height=5}
 quantidade_arrecadada <- as.data.frame(py$quantidade_arrecadada)
 
 # Criação do gráfico
@@ -225,7 +207,7 @@ plot1 <- quantidade_arrecadada %>%
   theme_tq() + 
   geom_label(aes(label = valor_total_text)) +
   scale_y_continuous(labels = dollar) +
-  labs(title='Total arrecadado por empresa', 
+  labs(title='Quantidade arrecadada pelas três maiores empresas', 
        x='empresas de taxi',
        y='total arrecadado')
 
@@ -239,25 +221,24 @@ plot2 <- quantidade_arrecadada %>%
   ggplot(aes(reorder(vendor, -numero_de_corridas), numero_de_corridas)) + 
   
   # criando gráfico de colunas
-  geom_col(fill="#e31a1c") +
+  geom_col(fill="#2c3e50") +
   
   # formatando os gráficos
   geom_smooth(method='lm', se=FALSE) + 
   geom_label(aes(label = numero_de_corridas)) +
   theme_tq() + 
   labs(
-    title='Número de corridas realizadas por empresa', 
+    title='Número de corridas realizadas pelas três maiores empresas', 
     x='empresas de taxi',
     y='número de corridas'
     )
 
-p1 <- arrangeGrob(plot1, plot2, ncol = 2)
-grid.arrange(p1)
 
-
+plot <- arrangeGrob(plot1, plot2, ncol=2)
+grid.arrange(plot)
 ```
 
-
+Entre as quatro empresas que estão em operação, somente três tiveram faturamentos expressivos - mais de um milhão de dólares - entre 2009 e 2012. Também sendo possível observar que existe uma concentração do número de corridas e do faturamento nas empresas **Creative Mobile Technologies, LLC** e **VeriFone Inc**. Para se ter uma noção dessa concentração nas duas primeiras, a segunda empresa arrecadou, aproximadamente, sete vezes o que a terceira arrecadou.
 
 
 ### Distribuição mensal das corridas pagas em dinheiro nos últimos quatro anos
@@ -278,62 +259,75 @@ results = cur.fetchall()
 # transformando os dados obtidos em um dataframe com o index igual a data.
 distribuição = [{'data_mês': datetime.strptime(str(i[0]) + '-' + str(i[1]), '%Y-%m'), 
                  'numero_de_corridas': i[2]} for i in results]
+                 
 distribuição = pd.DataFrame(distribuição)
-```
 
-```{python}
-# extraindo as corridas por mês e por ano
-cur.execute("""
-SELECT EXTRACT(year FROM pickup_datetime) AS year,
-    EXTRACT(month FROM pickup_datetime) AS month,
-      COUNT(*)
-FROM trips
-GROUP BY 1, 2
-""")
-results = cur.fetchall()
-# transformando os dados obtidos em um dataframe com o index igual a data.
-distribuição_all = [{'data_mês': datetime.strptime(str(i[0]) + '-' + str(i[1]), '%Y-%m'), 
-                 'numero_de_corridas': i[2]} for i in results]
-distribuição_all = pd.DataFrame(distribuição_all)
-```
+distribuição['mês'] = distribuição['data_mês'].dt.month
 
-
-```{r}
-palette_light()
+month_mappers = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+          7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+          
+distribuição['mês_texto'] = distribuição['mês'].map(month_mappers)
 ```
 
 
 
 ```{r}
 distribuição <- py$distribuição
-distribuição_all <- py$distribuição_all
 
-
-plot1 <- distribuição %>%
-  ggplot(aes(numero_de_corridas)) + geom_histogram(fill="#e31a1c") + 
+distribuição %>%
+  ggplot(aes(numero_de_corridas)) + geom_histogram(fill="#2c3e50", bins=30) + 
   labs(title='Distribuição das corridas pagas em dinheiro por mês (2009-2012)',
        x='número de corridas', y='número de meses')
-  
-  theme_tq() 
-
-
-plot2 <- distribuição_all %>%
-  ggplot(aes(data_mês, numero_de_corridas)) + geom_line() + 
-  
-  
-  # Formatando o gráfico
-  theme_tq() + 
-  labs(title='Distribuição das corridas por mês (2009-2012)',
-       x='mês e ano', y='número de corridas')
-
-
-plot1
 ```
 
+Um dos pontos que chama a atenção é que a grande maioria dos meses possui entre 50000 e 80000 corridas, enquanto em alguns meses há somente 25000 corridas.
 
+Tendo isso em mente, é importante identificar em quais meses há essa oscilação negativa. Para além disso, também é necessário observar se existe dentro da amostra algum mẽs em que não houve registro de corridas de taxi. 
+
+Uma forma simples de checar a existência de meses em que não houveram corridas é comparar a quantidade de valores que foi utilizado para criação do histograma com a quantidade que deveria ser utilizada (48)
+
+
+```{r}
+distribuição %>%
+  
+  # Manipulação dos dados
+  mutate(month = month(data_mês)) %>%
+  group_by(month, mês_texto) %>%
+  summarize(count = n()) %>%
+  
+  # Criação de um gráfico de barras
+  ggplot(aes(x=reorder(mês_texto, month), y=count)) + 
+  geom_bar(stat='identity', fill="#2c3e50")  +
+
+
+  # Formatação do gráfico
+  theme_tq() + 
+  labs(
+    title='Presença de registros por mẽs',
+    x='Mês',
+    y='Quantidade de vezes nos quatro anos'
+  )
+  
+```
+
+Um fato que chama a atenção é que em alguns dos anos contemplados pela amostra, existem dois meses de dezembro e um mês de novembro em que não há registro de nenhuma corrida.
+
+Para se ter uma noção mais profunda de como isso afeta os dados que estão sendo observados, será criado um gráfico compara a quantidade de dias esperada com a quantidade de dias presente no banco de dados.
+
+Com esse intuito, será utilizado o processo abaixo:
+
+      1. Cálculo do total de dias por mẽs nos ultimos quatro anos
+      2. Divisão desse valor por quatro
+      3. Diferença entre a quantidade de dias esperada para cada mês e a quantidade de dias
+      média presente no banco de dados.
+      4. O valor resultante da etapa trẽs foi subtraido de 1 para obtenção do percentual de valores
+      ausentes por mês nos últimos quatro anos.
 
 
 ```{python}
+# Extraindo o número de dias por mês nos quatros anos do banco de dados
+# Para tanto foi necessário a utilização de um subquery.
 cur.execute("""
 SELECT EXTRACT(month FROM t1.date), 
        COUNT(*)
@@ -344,18 +338,18 @@ GROUP BY 1
 ORDER BY 1
 """)
 
+# Manipulação dos dados com o intuito de criar um dataframe
 results = cur.fetchall()
 results = [{'mês': key, 'numero_de_dias_com_registros': value} for key, value in results]
 results = pd.DataFrame(results).sort_values(by='mês', ascending=True)
 
 
-month_mappers = {1: 'Jan', 2:'Fev', 3:'Mar', 4:'Abr', 5:'Mai', 6: 'Jun',
-                 7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Out', 11: 'Nov', 12: 'Dec'}
-
 results['mês_texto'] = results['mês'].map(month_mappers)
 ```
 
 ```{r}
+
+# vetor com os dias esperados por mês em ordem
 dias_por_mes <- c(31,28,31,30,31,30,31,31,30,31,30,31)
 by_month_year <- py$results
 
@@ -399,56 +393,15 @@ table_dias %>%
   )
 
 
-table_dias
 ```
+
+Através da observações do gráfico, pode ser percebido que entre Novembro e Janeiro, existe uma grande quantidade de dias em que não há a presença de registros no nosso banco de dados. A existência desses valores afeta diretamente os resultados do próximo gráfico que diz respeito ao total de gorgetas pagos as empresas nos últimos três meses de 2012.
+
+### Total de gorgetas por dia nos últimos três meses de 2012
 
 
 ```{python}
-cur.execute("""
-SELECT payment_type, nome, SUM(tip_amount)
-FROM trips t
-JOIN vendors v
-ON t.vendor_id = v.vendor_id
-GROUP BY 1, 2
-""")
-results = cur.fetchall()
-
-
-results
-results = [{'forma_de_pagamento': value[0], 'empresa': value[1], 'gorgeta': value[2]} for value in results]
-results = pd.DataFrame(results)
-```
-
-```{r}
-tips_by_vendor_payment <- py$results
-
-tips_by_vendor_payment %>%
-  
-  # criando coluna com os valores em dólares
-  mutate(gorgeta_text = dollar(gorgeta)) %>%
-  
-  # retirando valores menores que 100 dólares
-  subset(gorgeta > 100) %>%
-  
-  # criando o grafico
-  ggplot(aes(empresa, gorgeta, fill=forma_de_pagamento)) + geom_col() +
-  scale_y_continuous(labels = dollar) +
-  
-  # Formatação do gráfico
-  theme_tq() +
-  geom_label(aes(label=gorgeta_text)) +
-  labs(
-    title='Total de gorgetas por empresa e por meio de pagamento',
-    x='Empresa',
-    y='Total (US$)',
-    fill='Forma de pagamento: '
-  )
-```
-
-
-
-
-```{python}
+# Extraindo o valor total das gorgetas obtidas por dia entre outubro de 2012 e dez de 2012.
 cur.execute("""
 SELECT pickup_datetime::date, SUM(tip_amount)
 FROM trips
@@ -458,9 +411,13 @@ GROUP BY 1
 """)
 results = cur.fetchall()
 
+
 results = [{'date': value[0], 'quantidade_diária': value[1]} for value in results]
+
+# criando um Dataframe ordenado pela data
 results = pd.DataFrame(results).sort_values(ascending=True, by='date')
 
+# convertando a coluna `date` para um formato que pode ser interpretado pelo R.
 results['date'] = pd.to_datetime(results['date'])
 
 
@@ -472,13 +429,17 @@ gorgetas <- py$results
 
 gorgetas %>%
   
+  # utilizando a função date para converter para date
   mutate(date = date(date)) %>%
   
+  # criação de um gráfico de linhas
   ggplot(aes(x=date, y=quantidade_diária)) + 
   geom_line() +
-  scale_y_continuous(labels = dollar) +
-  scale_x_date(date_breaks = '4 days') +
   
+  
+  # Formatação do gráfico
+  scale_y_continuous(labels = dollar, limits = c(0, 2000)) +
+  scale_x_date(date_breaks = '4 days') +
 
   theme_tq() + 
   labs(
@@ -488,76 +449,169 @@ gorgetas %>%
     y='total de gorgetas (US$)'
   )
   
+
 ```
+
+
+
+Como dito anteriormente, a existência de dias em que não há existẽncia de registros de corridas afeta diretamente o resultado desse gráfico. O último valor presente no banco de dados é referente ao dia de 27-10-2012.
+
+Não da para inferir o motivo da ausência desses valores com os dados disponíveis. A hipótese mais provável é que esses dados estão realmente faltando porque, pelo menos no mês de Outubro, não há uma variação muito grande no total de gorgetas que foram concedidas pelos clientes. Outra possibilidade, menos provável, é que não houveram corridas entre 27 de Outubro e 31 de Dezembro.
+
+Para averiguar o real motivo da não existência desses registros seria necessário extrair os dados diretamente da fonte desses dados.
+
+
+## Quesitos Extras
+
+
+### Tempo médio das corridas realizadas no sábado e no domingo
 
 ```{python}
+# Adotei uma estratégia mais conservadora e optei por extrair os dados em seu formato bruto
+# do banco de dados com o intuito de evitar potenciais erros no resultado
+# A única modificação foi a adoção de um filtro para extrair somente as corridas que 
+# iniciaram no sábado ou no domingo
 cur.execute("""
-SELECT EXTRACT(dow from t1.pickup_datetime), AVG(t1.tempo_total)
-FROM (SELECT (EXTRACT(epoch FROM dropoff_datetime) - EXTRACT(epoch FROM pickup_datetime)) / 60 AS tempo_total,
-        pickup_datetime
-    FROM trips) t1
-WHERE EXTRACT(dow from t1.pickup_datetime) IN (0.0, 6.0)
-GROUP BY 1
-""")
-
-weekends = cur.fetchall()
-
-weekends = [{'weekday': i[0], 'avg': i[1]} for i in weekends]
-
-weekends = pd.DataFrame(weekends)
-```
-
-```{r}
-weekends <- py$weekends
-weekends
-```
-
-
-```{python}
-cur.execute("""
-SELECT pickup_latitude, 
-    pickup_longitude,
-    dropoff_latitude,
-    dropoff_longitude,
-    trip_distance,
-    total_amount
+SELECT dropoff_datetime, pickup_datetime
 FROM trips
-WHERE EXTRACT(year from pickup_datetime) = 2010
+WHERE EXTRACT(dow FROM pickup_datetime) IN (0.0, 6.0)
 """)
 
-geospatial = cur.fetchall()
+results = cur.fetchall()
+
+# Aqui faz se necessário passar o formato para o valor ser convertido para uma data
+# antes de ser inserido no DataFrame
+results = [{'dropoff_datetime': datetime.strftime(i[0],
+             format="%Y-%m-%d %H:%M:%S"), 
+            'pickup_datetime': datetime.strftime(i[1],
+             format="%Y-%m-%d %H:%M:%S")} for i in results]
 
 
-geospatial = [{'pickup_lat': float(i[0]), 'pickup_long': float(i[1]),
-               'dropoff_lat': float(i[2]), 'dropoff_long': float(i[3]),
-               'trip_distance': float(i[4])} for i in geospatial]
-geospatial = pd.DataFrame(geospatial)
+# Criação do dataframe e conversão para o formato datetime do pandas
+results = pd.DataFrame(results)
+results['dropoff_datetime'] = pd.to_datetime(results['dropoff_datetime'])
+results['pickup_datetime'] = pd.to_datetime(results['pickup_datetime'])
+
+
 ```
 
+- Processo de extração dessas informações;
 
+    1. Para obtenção dos dias da semana, foi utilizada a função dow da Amazon Redshift. Essa função retorna valores de
+    0 a 6 em que o 0 é igual a domingo e o 6 é igual a Sábado.
+    2. Esses dois números foram utilizados como filtro.
+    3. Os valores foram manipulados para criação de um DataFrame que posteriormente foi utilizado para calcular a média
+    do tempo médio em cada um desses dais.
 
 
 
 ```{r}
-geospatial <- py$geospatial
+results <- py$results
+
+results %>%
+  # obtendo a diferença em minutos
+  mutate(tempo_total = difftime(time1 = dropoff_datetime, time2 = pickup_datetime, units = 'mins')) %>%
+  
+  # extraindo o dia da semana utilizando a função weekdays
+  mutate(weekdays = weekdays(as.Date(pickup_datetime))) %>%
+  
+  # obtendo o tempo médio
+  group_by(weekdays) %>%
+  summarize(tempo_médio = mean(tempo_total))
 ```
 
-```{r}
-palette_light()
+A partir dos resultados da tabela, observa-se que o tempo médio nas corridas realizadas é praticamente igual nos dois dias. Em ambos os casos (após a realização da conversão da porção dos segundos), tem-se um tempo médio de, aproximadamente, 8 minutos e 45 segundos.
 
-new_geo <- sample_n(geospatial, size=10000)
+### Faturamento Acumulado ao longo dos quatro anos - Gráfico Animado
+
+```{python}
+
+# O Query abaixo será utilizado para obter a soma cumulativa por empresa ao longo dos quatro anos
+# Para tanto, criou-se uma subquery em conjunto com uma window function
+# No redshift, diferentemente de RDBMS tradicionais, é necessário especificar o frame
+# a ser utilizado `rows unbounded preceding`
+
+cur.execute("""
+SELECT t1.vendor_id,
+  t1.amount_by_day,
+  t1.date,
+  SUM(t1.amount_by_day) OVER (PARTITION BY t1.vendor_id ORDER BY t1.date rows unbounded preceding)
+FROM (SELECT vendor_id,
+   pickup_datetime::date as date,
+   SUM(total_amount) AS amount_by_day
+   FROM trips t
+   GROUP BY 1, 2) t1
+""")
+
+# Criação do DataFrame
+cumulative_sum = cur.fetchall()
+cumulative_sum = [{'vendor_id': i[0], 'daily_value': float(i[1]),
+                  'date': i[2], 'cum_sum': i[3]} for i in cumulative_sum]
+cumulative_sum = pd.DataFrame(cumulative_sum)
+
+cumulative_sum['date'] = pd.to_datetime(cumulative_sum['date'])
 ```
 
-```{r}
-map_data("state") %>%
 
-    
-  # extraindo as coordenadas para criação do polígno que será
-  # utilizado no processo de criação de um mapa
-  filter(region == 'new york') %>%
-  filter(lat > 40.5, lat < 41) %>%
-  filter(long > -74.5, long < -73.5)
+```{r fig.height=12, fig.width=12}
+cumulative_sum <- py$cumulative_sum
+
+
+cumulative_sum <- cumulative_sum %>%
+  # criando uma variável cum_sum em dólares
+  mutate(cum_sum_text = dollar(cum_sum)) %>%
+  # mudando o tipo de variável para date
+  mutate(date = date(date)) %>%
+  # organizando por data
+  arrange(date)
+
+# Criação de um gráfico de linha com um gráfico de pontos
+p <- ggplot(data=cumulative_sum, aes(x=date, y=cum_sum, color=vendor_id)) +
+  geom_line() + 
+  geom_point(size=2) +
+  
+  # Formatação do gráfico
+  theme_tq(14,"Avenir") + 
+  labs(title = "Faturamento acumulado até {frame_time}", x = "", y = "Faturamento (US$)") +
+  scale_fill_tq() +
+  theme(legend.position = 'right') +
+  scale_y_continuous(labels = dollar) + 
+  
+  # Características da animação:
+  # As animações serão realizadas com base na variável date
+  transition_time(date) +
+  shadow_wake(wake_length = 1, exclude_layer = 2) +
+  ease_aes('cubic-in-out')
+  
+
+animate(p)
+
+anim_save('serie_temporal.gif')
+
 ```
+
+Uma das coisas que chamam a atenção nesse gráfico é que o faturamento das empresas `Verifone` e `Creative Mobile Solutions` seguem o mesmo padrão ao longo do tempo nesses quatros anos.
+
+Por outro lado, o faturamento da empresa Dependable Driver Service possui uma inclinação mais tênue quando comparada com seus concorrentes.
+
+Por fim, as corridas realizadas pela empresa Total Solutions são muito raras dentro do nosso banco de dados e, por conta disso, ela só aparece no gráfico em algumas datas muito específicas.
+
+
+### Análise Geoespacial
+
+Uma análise que não é muito comum, mas que pode trazer insights muito importantes para uma empresa é a utilização de análise geoespacial através da utilização das coordenadas geográficas referentes a eventos específicos.
+
+Nesse sentido, no banco de dados disponível, existem quatro variáveis que estão relacionadas ao local em que a corrida começou e ao local em que ela terminou.
+
+Existem algumas corridas no banco de dados em que essas coordenadas não foram disponibilizadas e, por conta disso, optei por não utilizar essas coordenadas nos próximos gráficos que serão criados.
+
+#### Package Maps
+
+Utilizei o package maps e maptools para conseguir o formato do mapa da cidade de Nova York e suas subregiões: Manhatan, Main, Staten Island e Long Island. 
+
+Foi realizada uma filtragem com base nas coordenadas existentes no banco de dados porque o mapa inteiro abarcar toda a região metropolitana de Nova York.
+
+O formato do mapa que será utilizado para extrair insights pode ser observado abaixo:
 
 
 ```{r}
@@ -593,251 +647,131 @@ map_data("state") %>%
   theme(legend.position = 'right')
 ```
 
+Tenho dois objetivos principais com essa análise. O primeiro objetivo é identificar se existe uma concentração maior em locais específicos tanto para origem, como para destino.
+
+O Segundo objetivo é identificar se dependendo do local em que a corrida inicia ou termina, existe alguma tendência que se reflete no preço da corrida.
 
 
-
-```{r}
-
-getting_map <- function (data, labs){
-  min_lat <- 40.5
-  max_lat <- 40.9
-  min_long <- -74.5
-  max_long <- -73.5
-  
-  data <- data %>%
-  # retirando distâncias muito grandes
-  filter(trip_distance < quantile(trip_distance, 0.98)) %>%
-  
-  filter(pickup_lat > 40.5, pickup_lat < 41) %>%
-  filter(pickup_long > -74.5, pickup_long < -73.5)
-  
-  map_data("state") %>%
-
-    
-  # extraindo as coordenadas para criação do polígno que será
-  # utilizado no processo de criação de um mapa
-  filter(region == 'new york') %>%
-  filter(lat > 40.5, lat < 41) %>%
-  filter(long > -74.5, long < -73.5) %>%
-    
-      # criando polígno
-  ggplot(aes(x = long, y = lat, group = group)) +
-  
-  
-  # utilizando branco como cor interna do poligno
-  geom_polygon(fill = 'white') +
-  
-  # preto como a cor da linha
-  geom_path(linetype=1, color='black') +
-  
-  # extraindo as coordenadas do banco de dados
-  geom_point(data=data, 
-             aes(x=pickup_long, y=pickup_lat, group=NULL, color= trip_distance), 
-             size=0.05, alpha=0.10) +
-  
-  
-  # criando um gradient utilizando a variável trip_distance
-  scale_color_gradient(low='blue', high='orange') + 
-  
-  
-  # formatação do gráfico
-  theme_tq_dark() + 
-  labs +
-  
-  theme(legend.position = 'right')
-
-  
-}
-
-
-pickup <- labs(title = 'Distância x local em que a corrida iniciou',
-       x = 'latitude', y = 'longitude', color = 'Distância percorrida em milhas',
-       shape = 'Custo por milha')
-
-dropoff <-  labs(title = 'Distância x local em que a corrida terminou',
-       x = 'latitude', y = 'longitude', color = 'Distância percorrida em milhas',
-       shape = 'Custo por milha') 
-
-map_pickup <- getting_map(geospatial, labs = pickup)
-  
-  
-  
-  
-
-  
-  
-```
-
-```{r}
-map_pickup
-```
-
-
-```{r}
-getting_map <- function (data, labs){
-  min_lat <- 40.5
-  max_lat <- 40.9
-  min_long <- -74.5
-  max_long <- -73.5
-  
-  data <- data %>%
-  filter(trip_distance < quantile(trip_distance, 0.98)) %>%
-  filter(dropoff_lat > 40.5, dropoff_lat < 41) %>%
-  filter(dropoff_long > -74.5, dropoff_long < -73.5)
-  
-  map_data("state") %>%
-    
-  # extraindo as coordenadas para criação do polígno que será
-  # utilizado no processo de criação de um mapa
-
-  filter(region == 'new york') %>%
-  filter(lat > 40.5, lat < 41) %>%
-  filter(long > -74.5, long < -73.5) %>%
-    
-      # criando polígno
-  ggplot(aes(x = long, y = lat, group = group)) +
-  
-  
-  # utilizando branco como cor interna do poligno
-  geom_polygon(fill = 'white') +
-  
-  # preto como a cor da linha
-  geom_path(linetype=1, color='black') +
-  
-  # extraindo as coordenadas do banco de dados
-  geom_point(data=data, 
-             aes(x=dropoff_long, y=dropoff_lat, group=NULL, color= trip_distance), 
-             size=0.05, alpha=0.10) +
-  
-  
-  # criando um gradient utilizando a variável trip_distance
-  scale_color_gradient(low='blue', high='orange') + 
-  
-  
-  # formatação do gráfico
-  theme_tq_dark() + 
-  labs +
-  
-  theme(legend.position = 'right')
-
-  
-}
-
-
-dropoff_map <- getting_map(geospatial, dropoff)
-```
-
-
-```{r}
-map_pickup
-```
-
-
-```{r}
-dropoff_map
-```
-
-
-```{r}
-min_lat <- 40.5
-max_lat <- 41
-min_long <- -74.37
-max_long <- -73.58
-
-
-geospatial %>%
-  ggplot(aes(x=pickup_long, y=pickup_lat, color=total_amount, size=num_pickups)) +
-  geom_jitter(alpha=0.5) +
-  geom_polygon()
-  scale_x_continuous(limits=c(min_long, max_long)) +
-  scale_y_continuous(limits=c(min_lat, max_lat)) +
-  scale_color_gradient(low='green', high="blue") +
-  theme_tq()
-```
-
-
-
-```{r}
-ggplot() +
-  theme_tq_green()
-```
-
-
-
-```{r}
-new_geo <- geospatial %>%
-  as.tibble() %>%
-  mutate(pickup_lat = round(pickup_lat, 5), 
-         pickup_long = round(pickup_long, 5),
-         dropoff_lat = round(dropoff_lat, 5),
-         dropoff_long = round(dropoff_long, 5)) %>%
-  mutate(lat = paste(pickup_lat, dropoff_lat, sep='|')) %>%
-  mutate(long = paste(pickup_long, dropoff_long, sep='|')) %>%
-  select(lat, long) %>%
-  group_by_all() %>%
-  summarise(count = n()) %>%
-  filter(lat != '0|0', long != '0|0') %>%
-  arrange(desc(count)) %>%
-  filter(count > 1)
-
-py$new_geo <- new_geo
-
-```
 
 ```{python}
-lat = new_geo['lat'].str.split('|', expand=True).rename({0: 'pickup_lat', 1: 'dropoff_lat'}, axis=1)
-long_ = new_geo['long'].str.split('|', expand=True).rename({0: 'pickup_long', 1: 'dropoff_long'}, axis=1)
 
-new_geo['pickup_lat'] = lat['pickup_lat']
-new_geo['dropoff_lat'] = lat['dropoff_lat']
-new_geo['pickup_long'] = long_['pickup_long']
-new_geo['dropoff_long'] = long_['dropoff_long']
+# Seleção das coordenadas geográficas, da distância em milhas e do valor total pago pela corrida
+# no ano de 2010
+cur.execute("""
+SELECT pickup_latitude, 
+    pickup_longitude,
+    dropoff_latitude,
+    dropoff_longitude,
+    trip_distance,
+    total_amount
+FROM trips
+WHERE EXTRACT(year from pickup_datetime) = 2010
+""")
 
-new_geo = new_geo[['pickup_lat','pickup_long','dropoff_lat','dropoff_long','count']]
+geospatial = cur.fetchall()
+
+
+geospatial = [{'pickup_lat': float(i[0]),'pickup_long': float(i[1]),
+               'dropoff_lat': float(i[2]), 'dropoff_long': float(i[3]),
+               'trip_distance': float(i[4]), 'total_amount': float(i[5])} for i in geospatial]
+geospatial = pd.DataFrame(geospatial)
+
+
 ```
 
 
 ```{r}
-new_geo %>%
+geospatial <- py$geospatial
+
+# Variáveis que limitarão o mapa
+min_lat <- 40.5
+max_lat <- 40.9
+min_long <- -74.5
+max_long <- -73.5
   
-  mutate_all(funs(as.numeric(.))) %>%
-  summary()
+data <-  geospatial %>%
+  # retirando distâncias muito grandes
+  #filter(trip_distance < quantile(trip_distance, 0.98)) %>%
+  
+  
+  # Limitando as coordenadas
+  filter(total_amount  < quantile(total_amount, 0.975)) %>%
+  filter(pickup_lat > 40.5, pickup_lat < 41) %>%
+  filter(pickup_long > -74.5, pickup_long < -73.5) %>%
+  filter(dropoff_lat > 40.5, dropoff_lat < 41) %>%
+  filter(dropoff_long > -74.5, dropoff_long < -73.5) %>%
+  
+  # Retirando locais que possuem destino e 
+  subset((dropoff_long != pickup_long) & (dropoff_lat != pickup_lat))
+  
+  
+   # Criação do poligno que demarcará Nova York
+  map_data("state") %>%
+
+    
+  # extraindo as coordenadas para criação do polígno que será
+  # utilizado no processo de criação de um mapa
+  
+  filter(region == 'new york') %>%
+  filter(lat > 40.5, lat < 41) %>%
+  filter(long > -74.5, long < -73.5) %>%
+    
+      # criando polígno
+  ggplot(aes(x = long, y = lat, group = group)) +
+  
+  
+  # utilizando branco como cor interna do poligno
+  geom_polygon(fill = 'white') +
+  
+  # preto como a cor da linha
+  geom_path(linetype=1, color='black') +
+  
+  # extraindo as coordenadas do banco de dados
+  geom_curve(data=data, 
+             aes(x=pickup_long, xend=dropoff_long,
+                 y=pickup_lat, yend=dropoff_lat,
+                 group=NULL, color=total_amount), 
+             alpha=0.01) +
+  
+  
+  # criando um gradient utilizando a variável trip_distance
+  scale_color_gradient(low='blue', high='orange', labels=dollar) + 
+  
+  
+  # formatação do gráfico
+  theme_tq_dark() +
+    
+  labs(
+    title='Principais destinos das viagens de taxi realizadas em Nova York',
+    x='Longitude',
+    y='Latitude',
+    color="Valor pago (US$)"
+  )
+  
+  theme(legend.position = 'right')
+
+  
 ```
+##### Processo de elaboração do gráfico:
+     1. Para elaboração desse gráfico, foram retirados valores de origem e de destino que tinham valores iguais.
+     2. Com o intuito de tornar o gráfico mais interpretável foi utilizado um alpha de 0.01.
+     3. Foi criado um gráfico de curvas unindo as coordenadas de origem e de destino.
+
+
+A partir do gráfico acima, algo que chama atenção é que viagens com destino a Main e Long Island são mais caras do que as viagens com destino a Manhatan.
+
+Os principais destinos utilizados pelos passageiros são: Manhatan, o centro da subregião e a costa sudoeste de Long Island e o sul da subregião de Main.
+
+Viagens para outros locais ocorrem, mas não foram refletidas por conta da utilização de um alpha muito pequeno.
 
 
 
-```{r}
-help(split)
-```
+## Considerações Finais
 
+A realização dessa análise possibilitou a obtenção de alguns insights.
 
-
-```{r}
-map_values %>%
-  filter(pickup_lat != 0) %>%
-  filter(pickup_lat > quantile(pickup_lat, 0.05), 
-         pickup_lat < quantile(pickup_lat, 0.95)) %>%
-  mutate(pickup_lat = round(pickup_lat, 4), 
-         pickup_long = round(pickup_long, 4)) %>%
-  select(pickup_lat, pickup_long) %>%
-  as.tibble() %>%
-  group_by(pickup_lat, pickup_long) %>%
-  summarise(count = n()) %>%
-  arrange(desc(count))
-```
-
-```{r}
-summary(map_values)
-```
-
-
-```{r}
-library(leaflet)
-
-geospatial %>%
-  leaflet() %>%
-  addProviderTiles(provider = providers$CartoDB.Positron) %>%
-  addMarkers(lat = geospatial$pickup_lat, lng = geospatial$pickup_long, clusterOptions = markerClusterOptions())
-```
+1. É necessário realizar uma checagem nos dados brutos para entender porque existe uma grande quantidade de dias em que não há registro de corridas no banco de dados.
+2. As duas empresas que mais faturam são, respectivamente, **Creative Mobile Technologies, LLC** e **VeriFone Inc**.
+3. A criação do gráfico geoespacial possibilitou a identificação dos locais em que se concentram as origens e os destinos dos passageiros. Algo que poderia ser investigado futuramente é a relação existente entre o tempo com o espaço através da criação de um gráfico que leve em conta o horário em que a corrida começa e o local em que ela começa.
 
 

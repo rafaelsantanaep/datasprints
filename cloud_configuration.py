@@ -1,8 +1,15 @@
+# interação com o cluster
 import boto3
+
+# Criação de alguns formatos
 import pandas as pd
 import json
+
+# utilização no processo de checagem do cluster
 import datetime
 from time import sleep
+
+# hiding user iput on the terminal
 import getpass
 
 first_piece = """
@@ -91,7 +98,7 @@ class ConfiguringCloud:
                 NodeType=self.dwh_node_type,
                 NumberOfNodes=int(self.dwh_num_nodes),
                 DBName=self.db_name,
-                ClusterIdentifier='redshift-2',
+                ClusterIdentifier='redshift-1',
                 MasterUsername=self.user,
                 MasterUserPassword=self.password,
                 IamRoles=[self.iam_role])
@@ -99,7 +106,7 @@ class ConfiguringCloud:
             print(e)
 
         while True:
-            response = redshift.describe_clusters(ClusterIdentifier='redshift-2')
+            response = redshift.describe_clusters(ClusterIdentifier='redshift-1')
             print('Aguarde um momento, o cluster está sendo criado! Isso pode levar alguns minutos.')
             current_time = datetime.datetime.now()
             sleep(60)
@@ -141,7 +148,7 @@ class ConfiguringCloud:
         print(file_content)
 
 
-        with open('dwh.cfg', 'w') as f:
+        with open('/home/rafael/Documents/data_sprints/dwh.cfg', 'w') as f:
             f.write(file_content)
 
 
@@ -163,6 +170,4 @@ if __name__ == "__main__":
             config.filling_parameters()
 
     config.creating_cluster()
-    
 
-    

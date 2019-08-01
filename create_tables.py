@@ -50,7 +50,7 @@ def main():
     """
     # lendo o arquivo com as configurações
     config = configparser.ConfigParser()
-    config.read('dwh.cfg')
+    config.read('/home/rafael/Documents/data_sprints/dwh.cfg')
 
     # conexão com a database no cluster
     conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['CLUSTER'].values()))

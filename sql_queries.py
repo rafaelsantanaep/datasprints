@@ -5,7 +5,7 @@ drop_table_vendors = "DROP TABLE IF EXISTS vendors"
 
 create_staging_trips_table = """
     CREATE TABLE IF NOT EXISTS staging_trips (
-    vendor_id          CHAR(3) REFERENCES vendors (vendor_id),
+    vendor_id          VARCHAR(3) REFERENCES vendors (vendor_id),
     pickup_datetime    TEXT,
     dropoff_datetime    TEXT,
     passenger_count    INT,
@@ -62,7 +62,7 @@ create_table_trips = (
     tolls_amount       FLOAT,
     total_amount       FLOAT,
     trip_distance      FLOAT,
-    vendor_id          CHAR(3) REFERENCES vendors (vendor_id),
+    vendor_id          VARCHAR(3) REFERENCES vendors (vendor_id),
     PRIMARY KEY (pickup_datetime, dropoff_datetime)
     )
     """
