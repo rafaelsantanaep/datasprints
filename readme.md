@@ -52,7 +52,7 @@ apt-get -y install libcurl4-gnutls-dev
 ##### Rstudio
 wget https://download1.rstudio.org/desktop/debian9/x86_64/rstudio-1.2.1335-amd64.deb
 dpkg -i $HOME/Downloads/rstudio-1.2.1335-amd64.deb
-apt install -f
+apt-get install -f
 
 
 # Dentro do console do Rstudio
@@ -84,15 +84,15 @@ cloud_configuration.py >> create_tables.py >> etl.py
 
 O primeiro arquivo irá te perguntar os valores da sua key e secret da amazon e, com esses dados, irá criar um Cluster na Amazon Redshift e também irá criar um `IAM Role` com autorização para baixar dados da S3.
 
-Esse processo é importante porque facilita muito o processo de ETL, principalmente, porque é possível extrair os dados diretamente do Bucket que eu criei `s3a://data-sprints-test` e realizar a ingestão desses dados no Cluster que será criado.
+Esse processo é importante porque facilita muito o processo de ETL, principalmente, porque é possível extrair os dados diretamente do Bucket que eu criei `s3://data-sprints-test` e realizar a ingestão desses dados no Cluster que será criado.
 
 Com o intuito de limitar um pouco os gastos, optei pela configuração de um cluster com apenas um Node, no entanto, isso pode ser alterado fácilmente dentro do arquivo `cloud_configuration.py`.
 
-O processo de criação do cluster e realização do ETL dura em torno de 8 minutos, variando conforme a capacidade de processamento do cluster (número de nodes, principalmente).
+O processo de criação do cluster e realização do ETL dura em torno de 8 minutos, variando conforme a capacidade de processamento do clusters.
 
 **Importante**: Ao interromper o cluster, nunca se esquela de deletá-lo para não incorrer em custos extras.
 
-Após a realização do ETL, o arquivo repport.rmd já está configurado com os packages necessários para analisar os dados do banco de dados.
+Após a realização do ETL, o arquivo repport.rmd já está linkado com o cluster.
 
 
 
